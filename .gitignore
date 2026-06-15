@@ -34,7 +34,8 @@ var/
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-!yz-pixel-ring.spec   # ours is hand-maintained, keep it
+# ours is hand-maintained — keep it (no inline comment: git would treat it as pattern text)
+!yz-pixel-ring.spec
 
 # Installer logs
 pip-log.txt

@@ -42,8 +42,11 @@ def main() -> int:
         print("note: yz_pixel_ring/_ui missing — binary will have the API/daemon but no "
               "web UI. Use --with-ui (or build it once) to include it.", file=sys.stderr)
 
-    _run([sys.executable, "-m", "PyInstaller", "--noconfirm", "yz-pixel-ring.spec"],
-         cwd=ROOT)
+    spec = ROOT / "yz-pixel-ring.spec"
+    if not spec.is_file():
+        print(f"error: spec not found at {spec}", file=sys.stderr)
+        return 1
+    _run([sys.executable, "-m", "PyInstaller", "--noconfirm", str(spec)], cwd=ROOT)
     out = ROOT / "dist"
     print(f"\nDone. Binary in: {out}")
     return 0
