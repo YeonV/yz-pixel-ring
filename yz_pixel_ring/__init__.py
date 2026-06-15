@@ -7,7 +7,7 @@ The legacy Raspberry-Pi SPI/APA102 backend has been removed — this package now
 targets the USB ring only.
 """
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 from .led import PixelRing, find
 from .tuning import Tuning
