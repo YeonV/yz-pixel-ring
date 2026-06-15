@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yz-pixel-ring"
+version = "0.2.0"
+description = "Headless control + animation daemon for the ReSpeaker USB Mic Array v2.0 pixel ring"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Yeon (Blade)", email = "trusted.yeon@gmail.com" },
+]
+keywords = ["respeaker", "pixel ring", "led", "voice", "doa", "vad"]
+dependencies = [
+    "pyusb>=1.1.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "websocket-client>=1.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "websockets>=12.0",
+]
+build = [
+    "pyinstaller>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YeonV/yz-pixel-ring"
+Repository = "https://github.com/YeonV/yz-pixel-ring"
+
+[project.scripts]
+yz-pixel-ring = "yz_pixel_ring.daemon:main"
+
+[tool.setuptools]
+packages = ["yz_pixel_ring"]
+
+[tool.setuptools.package-data]
+# The built web UI (vite `build:pages` output) ships inside the wheel.
+yz_pixel_ring = ["_ui/**/*"]

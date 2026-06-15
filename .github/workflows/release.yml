@@ -1,0 +1,168 @@
+name: Builder
+
+# Modeled on the JarvYZ yz-family releaser (see assistant/satellites/yz-music):
+# assets job (IIFE) -> per-OS desktop matrix (PyInstaller) -> one create-release.
+#
+# yz-pixel-ring is standalone (NOT a JarvYZ subtree satellite), so: no manifest.json,
+# and no wheel — the web UI lives in ui/dist (outside the Python package), so a wheel
+# would ship without a UI. The distributables are the per-OS standalone binaries; the
+# IIFE is published too for host-embedding (window.YzPixelRing).
+#
+# Trigger: push to main whose commit message starts with "Release " (e.g.
+# "Release 0.3.0"), or manual dispatch. Version flows from pyproject.toml.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- assets
+  # Platform-independent output: the embeddable dynamic-module IIFE. Also the
+  # single source of truth for the version (reused by the matrix + release).
+  build-assets:
+    name: Assets (IIFE + wheel)
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release ')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Read version from pyproject.toml
+        id: ver
+        run: echo "VERSION=$(grep -m1 -E '^version = ' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
+      - name: npm ci
+        working-directory: ui
+        run: npm ci
+      - name: Build dynamic module (IIFE)
+        working-directory: ui
+        run: npm run build:lib     # -> ui/dist-lib/yz-pixel-ring.iife.js
+      - name: Build SPA into the package
+        working-directory: ui
+        run: npm run build:pages   # -> yz_pixel_ring/_ui (bundled into the wheel)
+      - name: Build wheel
+        run: uv build --wheel --out-dir dist-wheel
+      - name: Stage release assets
+        run: |
+          V="${{ steps.ver.outputs.VERSION }}"
+          mkdir -p out
+          cp ui/dist-lib/yz-pixel-ring.iife.js "out/yz-pixel-ring_${V}.iife.js"
+          cp dist-wheel/yz_pixel_ring-*.whl out/
+          ls -l out/
+      - name: Upload IIFE + wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: assets
+          path: out/**
+
+  # ---------------------------------------------------------------- desktop
+  # PyInstaller freezes the host interpreter, so binaries are built ON each OS.
+  # build_exe.py --with-ui builds the SPA then freezes it into the binary.
+  build-desktop:
+    name: Standalone (${{ matrix.platform }})
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release ')
+    needs: build-assets
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            ext: ".exe"
+          - os: macos-latest
+            platform: macos
+            ext: ""
+          - os: ubuntu-22.04
+            platform: linux
+            ext: ""
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Install deps (incl. PyInstaller)
+        run: uv sync --extra build
+      - name: Build standalone binary (UI + freeze)
+        run: uv run python tools/build_exe.py --with-ui
+      - name: Smoke test — binary loads and prints help
+        run: ./dist/yz-pixel-ring${{ matrix.ext }} --help
+      - name: Rename artifact (version + platform)
+        run: |
+          V="${{ needs.build-assets.outputs.version }}"
+          ASSET="yz-pixel-ring_${V}_${{ matrix.platform }}${{ matrix.ext }}"
+          mkdir -p out
+          cp "dist/yz-pixel-ring${{ matrix.ext }}" "out/$ASSET"
+          [ -z "${{ matrix.ext }}" ] && chmod +x "out/$ASSET" || true
+          echo "Staged -> $ASSET"
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: out/**
+
+  # ---------------------------------------------------------------- release
+  create-release:
+    name: Create Release
+    if: always() && (github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release '))
+    needs: [build-assets, build-desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read version from pyproject.toml
+        id: ver
+        run: echo "VERSION=$(grep -m1 -E '^version = ' pyproject.toml | sed -E 's/.*"(.*)".*/\1/')" >> "$GITHUB_OUTPUT"
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Generate changelog
+        run: |
+          V="${{ steps.ver.outputs.VERSION }}"
+          echo "## yz-pixel-ring v${V}" > changelog.md
+          echo "" >> changelog.md
+          echo "Standalone binaries for Windows / macOS / Linux + the embeddable IIFE." >> changelog.md
+          echo "Still needs the one-time USB driver step — see the README." >> changelog.md
+          echo "" >> changelog.md
+          echo "### Changes" >> changelog.md
+          PREV=$(git describe --tags --abbrev=0 "HEAD^" 2>/dev/null || true)
+          if [ -n "$PREV" ]; then
+            git log --pretty=format:"- %s (%h)" "${PREV}..HEAD" >> changelog.md
+          else
+            git log --pretty=format:"- %s (%h)" -n 20 >> changelog.md
+          fi
+      - name: Create / update Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.VERSION }}
+          name: yz-pixel-ring v${{ steps.ver.outputs.VERSION }}
+          body_path: changelog.md
+          files: artifacts/**/*
