@@ -1,12 +1,13 @@
 name: Builder
 
 # Modeled on the JarvYZ yz-family releaser (see assistant/satellites/yz-music):
-# assets job (IIFE) -> per-OS desktop matrix (PyInstaller) -> one create-release.
+# assets job (IIFE + wheel) -> per-OS desktop matrix (PyInstaller) -> create-release,
+# plus publish-pypi (the wheel, via OIDC trusted publishing).
 #
-# yz-pixel-ring is standalone (NOT a JarvYZ subtree satellite), so: no manifest.json,
-# and no wheel — the web UI lives in ui/dist (outside the Python package), so a wheel
-# would ship without a UI. The distributables are the per-OS standalone binaries; the
-# IIFE is published too for host-embedding (window.YzPixelRing).
+# yz-pixel-ring is standalone (NOT a JarvYZ subtree satellite), so no manifest.json.
+# The web UI is built INTO the package (yz_pixel_ring/_ui), so the wheel carries it.
+# Outputs: per-OS standalone binaries, the embeddable IIFE (window.YzPixelRing), and
+# a pip-installable wheel (attached to the Release AND pushed to PyPI).
 #
 # Trigger: push to main whose commit message starts with "Release " (e.g.
 # "Release 0.3.0"), or manual dispatch. Version flows from pyproject.toml.
@@ -68,6 +69,11 @@ jobs:
         with:
           name: assets
           path: out/**
+      - name: Upload wheel (for PyPI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist-wheel/*.whl
 
   # ---------------------------------------------------------------- desktop
   # PyInstaller freezes the host interpreter, so binaries are built ON each OS.
@@ -166,3 +172,27 @@ jobs:
           name: yz-pixel-ring v${{ steps.ver.outputs.VERSION }}
           body_path: changelog.md
           files: artifacts/**/*
+
+  # ---------------------------------------------------------------- pypi
+  # Push the wheel to PyPI via OIDC trusted publishing — no token/secret stored.
+  # Requires the pending publisher configured on PyPI (project yz-pixel-ring,
+  # owner YeonV, repo yz-pixel-ring, workflow release.yml). If you set an
+  # Environment name in that publisher config, add `environment: <name>` below.
+  # skip-existing makes re-runs of an already-published version a no-op.
+  publish-pypi:
+    name: Publish to PyPI
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'Release ')
+    needs: build-assets
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required for trusted publishing (OIDC)
+    steps:
+      - name: Download wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-dist
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
