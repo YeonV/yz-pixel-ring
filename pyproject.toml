@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yz-pixel-ring"
-version = "0.2.0"
+version = "0.2.1"
 description = "Headless control + animation daemon for the ReSpeaker USB Mic Array v2.0 pixel ring"
 readme = "README.md"
 requires-python = ">=3.10"

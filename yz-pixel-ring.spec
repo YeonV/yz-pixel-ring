@@ -9,6 +9,7 @@
 #   YZ_CONSOLE=0   build with no console window (output -> ~/.yz-pixel-ring/daemon.log)
 #   YZ_ONEDIR=1    build a folder instead of a single file (faster start, no AV flags)
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -16,9 +17,12 @@ root = os.path.abspath(os.getcwd())
 console = os.environ.get("YZ_CONSOLE", "1") != "0"
 onedir = os.environ.get("YZ_ONEDIR", "0") == "1"
 
-# App icon (regenerate from the SVG with tools/make_icon.py). Optional.
+# App icon (regenerate from the SVG with tools/make_icon.py). Windows-only: the
+# .ico matters for the .exe, and on macOS PyInstaller would try (and, without
+# Pillow installed, fail) to convert it to .icns. mac/linux artifacts are bare
+# CLI binaries that don't carry an icon anyway.
 icon_path = os.path.join(root, "assets", "yz-pixel-ring.ico")
-icon = icon_path if os.path.isfile(icon_path) else None
+icon = icon_path if (os.path.isfile(icon_path) and sys.platform == "win32") else None
 
 # Bundle the built UI (served by the daemon at http://127.0.0.1:9700/). It lives
 # inside the package so the same path works for the wheel and the frozen exe.
