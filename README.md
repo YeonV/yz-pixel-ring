@@ -10,6 +10,8 @@
 [![Vite](https://img.shields.io/badge/Vite-blue.svg?logo=vite&logoColor=white)](https://vite.dev/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?logo=opensourceinitiative&logoColor=white)](LICENSE)
 
+<img width="1282" height="710" alt="image" src="https://github.com/user-attachments/assets/7b94c332-5d0f-4795-9413-2b3e7a79a08e" />
+
 A headless daemon + web UI to drive the **ReSpeaker USB Mic Array v2.0** LED ring
 (USB `0x2886:0x0018`, XVSR3000). It mirrors a voice assistant's state on the ring,
 doubles as a [LedFx](https://github.com/LedFx/LedFx) output device, and gives you
