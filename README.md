@@ -260,6 +260,16 @@ npm run build:lib                # IIFE -> ui/dist-lib (host-embeddable, window.
 See [ui/README.md](ui/README.md) for the web UI (build modes, structure, how it talks to
 the daemon).
 
+### Cutting a release
+
+```bash
+python tools/release.py            # bump patch, commit "Release x.y.z", push
+#   --minor / --major / --set X.Y.Z   other bumps;  --no-push to stop before pushing
+```
+
+The push triggers the **Builder** workflow, which builds the per-OS binaries + IIFE +
+wheel, publishes a GitHub Release, and uploads the wheel to PyPI (OIDC, no token).
+
 ## License
 
 [MIT](LICENSE) © Yeon (Blade)
